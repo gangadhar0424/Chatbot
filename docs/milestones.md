@@ -34,9 +34,9 @@ runs end to end — not just compiles or returns a 200.
 - [x] Wire in Prompt B; render the result as a viewable/downloadable Markdown doc
 
 ## Milestone 5 — Production swap
-- [ ] Provider-router implemented so an env var switches Ollama ↔ cloud API
+- [x] Provider-router implemented so an env var switches Ollama ↔ cloud API
       with no code change
-- [ ] API key handled server-side only
+- [x] API key handled server-side only
 - [x] Postgres wired in for persistence (Neon); Redis deferred to deployment
 
 ## Milestone 6 — Action layer (phase 2, after the above is solid)

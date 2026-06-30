@@ -1,17 +1,21 @@
 """LLM provider router — the single seam for dev/prod swaps.
 
 Every caller goes through `generate(messages, system_prompt)` and never imports
-a concrete provider directly. Switching from Ollama (dev) to a cloud API (prod,
-Milestone 5) is then an env-var change (LLM_PROVIDER), never a code change.
+a concrete provider directly. Switching providers is an env-var change
+(LLM_PROVIDER), never a code change.
 
-Per project convention, any provider API key is read here server-side only and
-is never exposed to the frontend.
+Supported values:
+  ollama  — local Ollama server (default, dev)
+  openai  — any OpenAI-compatible /v1/chat/completions endpoint (prod)
+
+Per project convention, any provider API key is read server-side only and is
+never exposed to the frontend.
 """
 
 import os
 
 from app.schemas import Message
-from app.llm import ollama_client
+from app.llm import ollama_client, openai_client
 
 
 async def generate(
@@ -23,11 +27,8 @@ async def generate(
 ) -> str:
     """Generate an assistant reply from conversation messages + a system prompt.
 
-    Dispatches on the LLM_PROVIDER env var. Only "ollama" is implemented in
-    Milestone 1; cloud providers are added behind this same signature later.
-
-    Optional `format`/`temperature` are passed through to the provider — e.g.
-    format="json" to constrain the model to valid JSON for the Prompt A turn.
+    Dispatches on LLM_PROVIDER. Optional format/temperature are passed through
+    to whichever client handles the request.
     """
     provider = os.getenv("LLM_PROVIDER", "ollama").lower()
 
@@ -36,7 +37,11 @@ async def generate(
             messages, system_prompt, format=format, temperature=temperature
         )
 
+    if provider == "openai":
+        return await openai_client.generate(
+            messages, system_prompt, format=format, temperature=temperature
+        )
+
     raise ValueError(
-        f"Unknown LLM_PROVIDER={provider!r}. "
-        "Milestone 1 supports only 'ollama'."
+        f"Unknown LLM_PROVIDER={provider!r}. Supported values: 'ollama', 'openai'."
     )
