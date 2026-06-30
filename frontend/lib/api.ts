@@ -36,3 +36,29 @@ export async function postChat(
 
   return (await res.json()) as ChatReply;
 }
+
+export interface PrdReply {
+  prd: string;
+}
+
+/**
+ * Generate the PRD for a completed session. Called once after the user
+ * confirms their answers. The backend runs its own completeness gate before
+ * invoking Prompt B — returns 409 if any field is still empty.
+ */
+export async function generatePrd(sessionId: string): Promise<PrdReply> {
+  const res = await fetch(`${API_BASE_URL}/generate-prd`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(
+      (detail as { detail?: string }).detail ?? `Backend returned ${res.status}`
+    );
+  }
+
+  return (await res.json()) as PrdReply;
+}

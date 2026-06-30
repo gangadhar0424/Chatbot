@@ -28,3 +28,11 @@ class ChatResponse(BaseModel):
     reply: str
     phase: Literal["gathering", "ready_for_prd"]
     spec: dict[str, Any]
+
+
+class PrdRequest(BaseModel):
+    session_id: str
+
+
+class PrdResponse(BaseModel):
+    prd: str

@@ -156,6 +156,54 @@ Expected output:
 }"""
 
 
+# --- Prompt B, verbatim from docs/intake-chatbot-prompts.md -----------------
+
+PROMPT_B = """You are a senior product manager. You will be given a fully completed
+project specification in JSON. Write a complete, professional Product
+Requirements Document in Markdown.
+
+OUTPUT STRUCTURE — use these headers, in this order:
+1. Overview & problem statement
+2. Goals & success metrics
+3. Target users & use cases
+4. Scope (MVP, future scope, explicitly out of scope)
+5. Technical requirements
+6. UX & design
+7. Deployment & infrastructure
+8. Timeline & resources
+9. Maintenance & operations
+10. Risks & assumptions
+11. Open questions / to be determined
+
+RULES
+- Expand short, fragmented facts into clear, complete sentences and bullet
+  lists — do not just restate the JSON values verbatim.
+- In "Goals & success metrics," present business_goals as the lead — what
+  success means for the business or user — clearly distinguished from the
+  success_metrics that measure it.
+- In "Scope," group mvp_features by their priority field into three
+  subsections: Must-have (P0), Should-have (P1), and Could-have (P2) —
+  never present them as one flat list.
+- In "Technical requirements," include a short "Compliance & security"
+  subsection covering compliance_requirements, even if the answer is "no
+  regulations apply" — don't omit it just because it's a short answer.
+- In "Risks & assumptions," present known_risks as a short risk register:
+  each risk together with its impact level and its mitigation plan — not
+  just a bullet list of risk descriptions.
+- Any field whose value is "unspecified", ["unspecified"], or otherwise
+  empty must NOT be silently dropped. List it under "Open questions / to be
+  determined" instead, so gaps in the requirements stay visible to the
+  reader.
+- Do not invent details the user did not provide.
+- Output only the PRD in Markdown — no preamble, no JSON, no commentary
+  before or after the document."""
+
+
+def build_prompt_b_system_prompt() -> str:
+    """Prompt B — called once when the spec is complete, to generate the PRD."""
+    return PROMPT_B
+
+
 def build_prompt_a_system_prompt() -> str:
     """Prompt A + the shared spec schema, injected from the one source in code.
 

@@ -29,9 +29,9 @@ runs end to end — not just compiles or returns a 200.
       trusting the model's own "phase" value
 
 ## Milestone 4 — PRD generation + confirmation screen
-- [ ] Show the user a summary of the completed spec before generating the PRD,
+- [x] Show the user a summary of the completed spec before generating the PRD,
       with a chance to correct anything
-- [ ] Wire in Prompt B; render the result as a viewable/downloadable Markdown doc
+- [x] Wire in Prompt B; render the result as a viewable/downloadable Markdown doc
 
 ## Milestone 5 — Production swap
 - [ ] Provider-router implemented so an env var switches Ollama ↔ cloud API
