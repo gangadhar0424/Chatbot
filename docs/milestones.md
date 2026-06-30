@@ -37,7 +37,7 @@ runs end to end — not just compiles or returns a 200.
 - [ ] Provider-router implemented so an env var switches Ollama ↔ cloud API
       with no code change
 - [ ] API key handled server-side only
-- [ ] Postgres + Redis wired in for persistence and session cache
+- [x] Postgres wired in for persistence (Neon); Redis deferred to deployment
 
 ## Milestone 6 — Action layer (phase 2, after the above is solid)
 - [ ] File/project scaffolding generated from the completed spec

@@ -1,23 +1,22 @@
-"""FastAPI app for the intake chatbot — Milestone 2.
+"""FastAPI app for the intake chatbot — Milestone 5.
 
-POST /chat now runs the real Prompt A intake turn: it loads the session's spec
-+ history, calls the LLM once (in JSON mode) with Prompt A as the system prompt,
-parses the {updated_spec, reply_to_user, phase} contract, merges the spec
-forward, persists, and returns the user-facing reply.
-
-Spec is persisted per session in memory (app.sessions). To make extraction
-verifiable, the full spec is printed to the server console every turn and is
-also available at GET /debug/spec/{session_id}.
+Sessions (spec + conversation history) are now persisted to Postgres (Neon)
+via SQLAlchemy async. Every turn does an upsert after the LLM call so state
+survives a backend restart.
 """
 
 import json
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import flow, sessions
+import app.models  # noqa: F401 — registers SessionRow with Base.metadata
+from app.db import engine, get_db
 from app.llm.provider import generate
 from app.prompts import build_prompt_a_system_prompt, build_prompt_b_system_prompt
 from app.schemas import ChatRequest, ChatResponse, Message, PrdRequest, PrdResponse
@@ -28,7 +27,14 @@ load_dotenv()
 PROMPT_A_SYSTEM_PROMPT = build_prompt_a_system_prompt()
 PROMPT_B_SYSTEM_PROMPT = build_prompt_b_system_prompt()
 
-app = FastAPI(title="Project-intake chatbot", version="0.2.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await engine.dispose()
+
+
+app = FastAPI(title="Project-intake chatbot", version="0.3.0", lifespan=lifespan)
 
 # Allow the Next.js dev server to call us. Configurable for other origins.
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -62,8 +68,8 @@ def _build_turn_messages(spec: dict, history: list[Message], user_message: str) 
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
-    session = sessions.get_or_create(req.session_id)
+async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
+    session = await sessions.get_or_create(db, req.session_id)
 
     messages = _build_turn_messages(session.spec, session.history, req.message)
     raw = await generate(
@@ -76,8 +82,6 @@ async def chat(req: ChatRequest) -> ChatResponse:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
-        # JSON mode should prevent this, but fail loudly rather than corrupting
-        # the session if the model ever returns non-JSON.
         raise HTTPException(
             status_code=502,
             detail=f"Model did not return valid JSON: {exc}",
@@ -85,22 +89,16 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     reply = parsed.get("reply_to_user", "")
 
-    # Backend owns flow control, not the model. process_turn merges the model's
-    # extraction, rejects sentinels fabricated for future sections, applies the
-    # deterministic skip, normalizes structured-field + sentinel shapes, and
-    # recomputes the authoritative _meta. phase flips to ready_for_prd only when
-    # WE confirm every field is filled — never on the model's say-so.
     session.spec = flow.process_turn(
         session.spec, parsed.get("updated_spec"), req.message
     )
     phase = session.spec["_meta"]["phase"]
 
-    # Append both sides of this turn to the authoritative history.
     session.history.append(Message(role="user", content=req.message))
     session.history.append(Message(role="assistant", content=reply))
 
-    # Debug visibility: dump the full spec plus the backend-computed flow state
-    # to the server console every turn.
+    await sessions.save(db, req.session_id, session)
+
     meta = session.spec["_meta"]
     print(f"\n=== spec after turn (session {req.session_id}) ===")
     print(json.dumps(session.spec, indent=2))
@@ -116,9 +114,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
 
 @app.get("/debug/spec/{session_id}")
-async def debug_spec(session_id: str):
+async def debug_spec(session_id: str, db: AsyncSession = Depends(get_db)):
     """Return the current spec JSON for a session — for verifying extraction."""
-    session = sessions.get(session_id)
+    session = await sessions.get(db, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="No such session")
     return {"session_id": session_id, "spec": session.spec}
@@ -326,7 +324,9 @@ def _strip_trailing_commentary(text: str) -> str:
 
 
 @app.post("/generate-prd", response_model=PrdResponse)
-async def generate_prd(req: PrdRequest) -> PrdResponse:
+async def generate_prd(
+    req: PrdRequest, db: AsyncSession = Depends(get_db)
+) -> PrdResponse:
     """Generate the PRD from a completed spec using Prompt B.
 
     Runs the backend-side completeness gate before calling the model — if any
@@ -339,7 +339,7 @@ async def generate_prd(req: PrdRequest) -> PrdResponse:
     rendered as explicit preamble text so the model transcribes rather than
     re-derives. The result is fence-stripped and trailing commentary removed.
     """
-    session = sessions.get(req.session_id)
+    session = await sessions.get(db, req.session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="No such session")
 
