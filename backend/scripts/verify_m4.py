@@ -9,6 +9,12 @@ Milestone 4 verification -- two targeted checks:
    priority (P1 -> P0) and a risk mitigation when the model returns revised
    values, without corrupting the object shape or flipping phase away from
    ready_for_prd.
+
+NOTE (M5 staleness): test_409_gate() calls the pre-M5 in-memory sessions API
+(sessions.get_or_create(sid) without a db parameter) which no longer exists.
+That test will fail until updated to seed a session via POST /chat or by
+injecting a mock AsyncSession. test_structured_field_edit() is unaffected --
+it only calls flow.process_turn directly with no sessions dependency.
 """
 
 import json

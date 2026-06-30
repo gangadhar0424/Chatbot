@@ -62,3 +62,33 @@ export async function generatePrd(sessionId: string): Promise<PrdReply> {
 
   return (await res.json()) as PrdReply;
 }
+
+export interface ScaffoldResult {
+  output_path: string;
+  template: string;
+  match_exact: boolean;
+  match_note: string | null;
+  files_created: string[];
+}
+
+/**
+ * Generate a project scaffold from the completed spec.
+ * Returns the output directory path and list of files written to disk
+ * (server-side). The backend runs the same completeness gate as generate-prd.
+ */
+export async function generateScaffold(
+  sessionId: string
+): Promise<ScaffoldResult> {
+  const res = await fetch(`${API_BASE_URL}/generate-scaffold`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(
+      (detail as { detail?: string }).detail ?? `Backend returned ${res.status}`
+    );
+  }
+  return (await res.json()) as ScaffoldResult;
+}

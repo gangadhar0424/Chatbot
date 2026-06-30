@@ -36,3 +36,15 @@ class PrdRequest(BaseModel):
 
 class PrdResponse(BaseModel):
     prd: str
+
+
+class ScaffoldRequest(BaseModel):
+    session_id: str
+
+
+class ScaffoldResponse(BaseModel):
+    output_path: str
+    template: str
+    match_exact: bool
+    match_note: str | None
+    files_created: list[str]

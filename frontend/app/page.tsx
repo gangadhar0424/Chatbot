@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { generatePrd, postChat, type Message } from "@/lib/api";
+import { generatePrd, generateScaffold, postChat, type Message, type ScaffoldResult } from "@/lib/api";
 import SpecSummary from "@/app/components/SpecSummary";
 
 // Canned reply the "Not sure / skip" button sends. Prompt A treats it as a
@@ -27,6 +27,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [scaffolding, setScaffolding] = useState(false);
+  const [scaffoldResult, setScaffoldResult] = useState<ScaffoldResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -92,12 +94,26 @@ export default function ChatPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleGenerateScaffold() {
+    setScaffolding(true);
+    setError(null);
+    try {
+      const result = await generateScaffold(sessionIdRef.current);
+      setScaffoldResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scaffold generation failed");
+    } finally {
+      setScaffolding(false);
+    }
+  }
+
   function handleStartOver() {
     sessionIdRef.current = newSessionId();
     setMessages([]);
     setInput("");
     setSpec({});
     setPrd("");
+    setScaffoldResult(null);
     setError(null);
     setUiState("chat");
   }
@@ -234,6 +250,69 @@ export default function ChatPage() {
         <article className="prose prose-sm max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{prd}</ReactMarkdown>
         </article>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h2 className="mb-1 text-sm font-semibold text-slate-700">
+          Generate project scaffold
+        </h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Creates a starter file tree on the server based on your spec — no
+          packages installed, no commands run.
+        </p>
+
+        {!scaffoldResult ? (
+          <>
+            {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+            <button
+              onClick={handleGenerateScaffold}
+              disabled={scaffolding}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {scaffolding ? "Generating…" : "Generate Project Scaffold"}
+            </button>
+          </>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="font-medium text-slate-700">Template: </span>
+              <code className="rounded bg-slate-200 px-1 text-xs">
+                {scaffoldResult.template}
+              </code>
+              {!scaffoldResult.match_exact && (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
+                  approximate match
+                </span>
+              )}
+            </div>
+
+            {scaffoldResult.match_note && (
+              <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">
+                {scaffoldResult.match_note}
+              </p>
+            )}
+
+            <div>
+              <span className="font-medium text-slate-700">Output: </span>
+              <code className="break-all text-xs text-slate-600">
+                {scaffoldResult.output_path}
+              </code>
+            </div>
+
+            <details className="cursor-pointer">
+              <summary className="font-medium text-slate-700">
+                {scaffoldResult.files_created.length} files created
+              </summary>
+              <ul className="mt-1 space-y-0.5 pl-3">
+                {scaffoldResult.files_created.map((f) => (
+                  <li key={f}>
+                    <code className="text-xs text-slate-600">{f}</code>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
       </div>
     </main>
   );

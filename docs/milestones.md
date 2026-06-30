@@ -40,6 +40,6 @@ runs end to end — not just compiles or returns a 200.
 - [x] Postgres wired in for persistence (Neon); Redis deferred to deployment
 
 ## Milestone 6 — Action layer (phase 2, after the above is solid)
-- [ ] File/project scaffolding generated from the completed spec
+- [x] File/project scaffolding generated from the completed spec
 - [ ] Deployment integration
 - [ ] Maintenance hooks (docs, monitoring, periodic check-ins)

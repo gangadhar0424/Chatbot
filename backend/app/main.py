@@ -19,7 +19,13 @@ import app.models  # noqa: F401 — registers SessionRow with Base.metadata
 from app.db import engine, get_db
 from app.llm.provider import generate
 from app.prompts import build_prompt_a_system_prompt, build_prompt_b_system_prompt
-from app.schemas import ChatRequest, ChatResponse, Message, PrdRequest, PrdResponse
+from app.scaffolding.generator import generate_scaffold as _build_scaffold
+from app.scaffolding.matcher import pick_template
+from app.schemas import (
+    ChatRequest, ChatResponse, Message,
+    PrdRequest, PrdResponse,
+    ScaffoldRequest, ScaffoldResponse,
+)
 
 load_dotenv()
 
@@ -358,3 +364,29 @@ async def generate_prd(
     )
 
     return PrdResponse(prd=_strip_trailing_commentary(_strip_md_fence(prd_text)))
+
+
+@app.post("/generate-scaffold", response_model=ScaffoldResponse)
+async def generate_scaffold(
+    req: ScaffoldRequest, db: AsyncSession = Depends(get_db)
+) -> ScaffoldResponse:
+    """Copy the best-matching template, write a spec-derived README, and create
+    P0 feature stubs. Returns the output path and file list. Nothing is
+    installed or executed — file generation only."""
+    session = await sessions.get(db, req.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="No such session")
+
+    missing = flow.missing_fields(session.spec)
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Spec is not complete — missing fields: {missing}",
+        )
+
+    tech_stack = (
+        session.spec.get("technical_requirements", {}).get("tech_stack_preference")
+    )
+    match = pick_template(tech_stack)
+    result = _build_scaffold(session.spec, match)
+    return ScaffoldResponse(**result)
