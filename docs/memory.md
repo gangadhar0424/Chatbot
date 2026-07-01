@@ -123,6 +123,40 @@ impossible to reintroduce silently.
 
 ---
 
+## 2026-07-01 — Project complete (Milestones 1–9)
+
+**Status: all nine milestones done; 57/57 tests passing.**
+
+1. Skeleton — chat UI + backend + Ollama round-trip
+2. Real spec tracking — full schema, Prompt A wired in, session persistence
+3. Section flow + completion — ordered sections, sentinel handling,
+   structured field shapes, backend-verified `ready_for_prd`
+4. PRD generation + confirmation screen — spec review before generation,
+   Prompt B wired in, downloadable Markdown output
+5. Production swap — provider-router (Ollama ↔ cloud), server-side API
+   key, Neon Postgres persistence
+6. Action layer (partial) — project scaffolding from completed spec;
+   deployment integration and maintenance hooks deferred (see below)
+7. Evals — pytest suite, regression tests for all four known bugs,
+   scripted end-to-end conversation tests
+8. Grounding guardrails — extraction grounded in user input, structural +
+   semantic validation, confidence scoring
+9. Security hardening — prompt-injection resistance, rate limiting on
+   /chat, /generate-prd, /generate-scaffold, input sanitisation review,
+   API key rotation plan documented
+
+**Known open items (not yet done):**
+- OpenAI runtime test — the cloud provider path in the router is wired
+  but not exercised against a real OpenAI call in CI/eval.
+- Model adherence on cloud model — Prompt A/B behavior (JSON contract,
+  section-order discipline) has only been manually spot-checked against
+  a cloud model, not covered by the eval suite the way Ollama is.
+- Redis / deployment — Milestone 6's deployment integration and
+  maintenance hooks are unstarted; session cache is still in-memory/DB,
+  no Redis, no deployment target wired up.
+
+---
+
 ## 2026-06-30 — .gitignore files in templates
 
 **Decision: store as `gitignore` (no dot), rename to `.gitignore` on copy**
