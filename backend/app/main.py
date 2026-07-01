@@ -6,17 +6,21 @@ survives a backend restart.
 """
 
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import flow, sessions
-import app.models  # noqa: F401 — registers SessionRow with Base.metadata
-from app.db import engine, get_db
+import app.models  # noqa: F401 — registers SessionRow + GroundingLogRow with Base.metadata
+from app.db import AsyncSessionLocal, engine, get_db
+from app.models import GroundingLogRow
+
+logger = logging.getLogger(__name__)
 from app.llm.provider import generate
 from app.prompts import build_prompt_a_system_prompt, build_prompt_b_system_prompt
 from app.scaffolding.generator import generate_scaffold as _build_scaffold
@@ -73,9 +77,49 @@ def _build_turn_messages(spec: dict, history: list[Message], user_message: str) 
     return [spec_context, *history, new_turn]
 
 
+async def _log_grounding_async(
+    session_id: str,
+    turn_number: int,
+    grounding_report: dict,
+    user_message: str,
+) -> None:
+    """Write grounding check results to grounding_log (M8.3).
+
+    Opens its own DB session so it doesn't hold the request session open.
+    Runs as a FastAPI BackgroundTask after the response is sent.
+    """
+    if not grounding_report:
+        return
+    snippet = user_message[:200]
+    rows = [
+        GroundingLogRow(
+            session_id=session_id,
+            turn_number=turn_number,
+            field_path=field_path,
+            extracted_value=entry["extracted_value"],
+            user_message_snippet=snippet,
+            confidence=entry["confidence"],
+            grounded=entry["grounded"],
+            reverted=entry["reverted"],
+        )
+        for field_path, entry in grounding_report.items()
+    ]
+    try:
+        async with AsyncSessionLocal() as db:
+            db.add_all(rows)
+            await db.commit()
+    except Exception:
+        logger.exception("[grounding_log] Failed to write %d row(s)", len(rows))
+
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
+async def chat(
+    req: ChatRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> ChatResponse:
     session = await sessions.get_or_create(db, req.session_id)
+    turn_number = len(session.history) // 2 + 1  # 1-indexed, before appending
 
     messages = _build_turn_messages(session.spec, session.history, req.message)
     raw = await generate(
@@ -95,13 +139,27 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResp
 
     reply = parsed.get("reply_to_user", "")
 
+    grounding_report: dict = {}
     session.spec = flow.process_turn(
-        session.spec, parsed.get("updated_spec"), req.message
+        session.spec,
+        parsed.get("updated_spec"),
+        req.message,
+        history=session.history,
+        _enable_grounding=True,
+        _grounding_report=grounding_report,
     )
     phase = session.spec["_meta"]["phase"]
 
     session.history.append(Message(role="user", content=req.message))
     session.history.append(Message(role="assistant", content=reply))
+
+    background_tasks.add_task(
+        _log_grounding_async,
+        req.session_id,
+        turn_number,
+        grounding_report,
+        req.message,
+    )
 
     await sessions.save(db, req.session_id, session)
 

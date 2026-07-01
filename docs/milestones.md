@@ -56,11 +56,11 @@ runs end to end — not just compiles or returns a 200.
 - [x] Stale verify_m4.py test_409_gate replaced by a proper test here
 
 ## Milestone 8 — Grounding guardrails
-- [ ] Runtime check: extracted field values must be grounded in something
+- [x] Runtime check: extracted field values must be grounded in something
       the user actually said (no invented facts)
-- [ ] Validation beyond shape — catch values that are structurally valid
+- [x] Validation beyond shape — catch values that are structurally valid
       but semantically wrong
-- [ ] Model output confidence scoring before accepting extracted values
+- [x] Model output confidence scoring before accepting extracted values
 
 ## Milestone 9 — Security hardening
 - [ ] Prompt-injection resistance tested explicitly

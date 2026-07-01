@@ -39,7 +39,8 @@ def test_normal_flow_reaches_ready_for_prd(chat_client, fake_sessions):
     # Model returns only the section being filled; deep_merge accumulates.
     turns = [
         (
-            "Task management for remote teams",
+            "Task management for remote teams — want to reduce missed deadlines, "
+            "motivated by founder's own pain, aiming for 30% improvement",
             {"problem_and_vision": {
                 "one_liner": "Task management app for remote teams",
                 "problem_statement": "Teams lose track of work without a shared system",
@@ -49,7 +50,8 @@ def test_normal_flow_reaches_ready_for_prd(chat_client, fake_sessions):
             }},
         ),
         (
-            "Remote teams of 5-20, use cases are tracking tasks and assigning work",
+            "Remote teams of 5-20, use cases are tracking tasks and assigning work, "
+            "personas include team leads and individual contributors",
             {"users_and_use_cases": {
                 "target_users": "Remote software teams of 5-20 people",
                 "primary_use_cases": ["Track tasks", "Assign work"],
@@ -68,7 +70,8 @@ def test_normal_flow_reaches_ready_for_prd(chat_client, fake_sessions):
             }},
         ),
         (
-            "React + FastAPI, Slack integration, no special compliance",
+            "React + FastAPI, Slack integration, data model covers users teams tasks, "
+            "need 99.9% uptime, no regulations apply",
             {"technical_requirements": {
                 "tech_stack_preference": "React + FastAPI",
                 "integrations": ["Slack"],
@@ -86,7 +89,7 @@ def test_normal_flow_reaches_ready_for_prd(chat_client, fake_sessions):
             }},
         ),
         (
-            "Deploy to AWS, three environments, GitHub Actions for CI",
+            "Deploy to AWS, dev staging and prod environments, GitHub Actions for CI",
             {"deployment_infra": {
                 "deployment_target": "AWS",
                 "environments": "dev, staging, prod",

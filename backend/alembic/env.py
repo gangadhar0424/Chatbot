@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 load_dotenv()
 
 from app.db import Base, _async_url, _ssl_connect_arg  # noqa: E402
-import app.models  # noqa: F401, E402 — registers SessionRow with Base.metadata
+import app.models  # noqa: F401, E402 — registers SessionRow + GroundingLogRow with Base.metadata
 
 config = context.config
 

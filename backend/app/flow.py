@@ -16,6 +16,7 @@ app.spec, so they can never drift from the source of truth.
 """
 
 import copy
+import re
 from typing import Any
 
 from app.spec import deep_merge, initial_spec, _is_empty
@@ -227,13 +228,228 @@ def reject_future_sentinels(spec: dict, prev_spec: dict, current_section: str) -
                 spec[section][field] = copy.deepcopy(prev_spec[section][field])
 
 
-def process_turn(prev_spec: dict, updated_spec: Any, user_message: str) -> dict:
+# --- Grounding check (M8.1) ------------------------------------------------
+
+_GROUNDING_STOPS: frozenset[str] = frozenset({
+    "the", "and", "for", "are", "not", "but", "with", "this", "that",
+    "have", "from", "its", "into", "was", "were", "been", "being",
+    "has", "had", "did", "does", "will", "would", "could", "should",
+    "may", "might", "shall", "can", "all", "any", "both", "each",
+    "few", "more", "most", "other", "some", "such", "than", "too",
+    "very", "just", "only", "also", "same", "then", "here", "there",
+    "when", "where", "which", "who", "how", "what", "your", "our",
+    "their", "they", "them", "these", "those", "you", "her", "his",
+    "its", "out", "about", "above", "after", "before", "between",
+    "during", "through", "without", "within", "want", "like", "use",
+    "make", "need", "know", "get", "see", "one", "two", "new", "now",
+})
+
+
+def _grounding_tokens(text: str) -> set[str]:
+    """Lower-cased alpha tokens ≥ 3 chars, with stop-words excluded."""
+    return {
+        w for w in re.findall(r"[a-z]{3,}", text.lower())
+        if w not in _GROUNDING_STOPS
+    }
+
+
+def _field_text(value: Any) -> str:
+    """Extract the human-readable text from a field value for token comparison.
+
+    For structured list fields (mvp_features / known_risks entries), only the
+    text components are relevant — priority, impact, and mitigation are model
+    inferences that the semantic validator handles separately.
+    """
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, dict):
+                parts.append(item.get("name") or item.get("risk") or "")
+            else:
+                parts.append(str(item))
+        return " ".join(parts)
+    if isinstance(value, dict):
+        return value.get("name") or value.get("risk") or ""
+    return str(value)
+
+
+def _grounding_confidence(value: Any, msg_tokens: set[str]) -> float:
+    """Keyword-overlap confidence: fraction of value tokens found in msg_tokens.
+
+    Returns 0.0–1.0.  A value with no significant tokens (e.g. a number)
+    scores 1.0 to avoid false reverts on trivially short values.
+    """
+    value_tokens = _grounding_tokens(_field_text(value))
+    if not value_tokens:
+        return 1.0
+    return len(value_tokens & msg_tokens) / len(value_tokens)
+
+
+def check_grounding(
+    spec: dict,
+    prev_spec: dict,
+    user_message: str,
+    *,
+    _report: dict | None = None,
+) -> list[str]:
+    """Revert newly-filled fields whose values can't be traced to the user message.
+
+    'Newly filled' means the field was empty in prev_spec and now holds a real
+    (non-sentinel, non-empty) value.  A value is grounded if at least one
+    significant token from the extracted value also appears in the user message
+    (keyword-overlap with stop-word filtering).  Sentinels are always accepted.
+
+    _report, if provided, is populated with per-field grounding metadata for
+    the confidence logger:  {field_path: {extracted_value, confidence, grounded, reverted}}.
+
+    Returns a list of reverted 'section.field' paths for logging.
+    Mutates spec in place.
+    """
+    msg_tokens = _grounding_tokens(user_message)
+    reverted: list[str] = []
+
+    for section in SECTION_ORDER:
+        for field in SECTION_FIELDS[section]:
+            prev_val = prev_spec[section][field]
+            new_val = spec[section][field]
+
+            if not _is_empty(prev_val):
+                continue  # already filled in prev — trust it
+            if _is_empty(new_val):
+                continue  # still empty — nothing to check
+            if _is_sentinel(new_val):
+                continue  # explicit skip is always legitimate
+
+            confidence = _grounding_confidence(new_val, msg_tokens)
+            grounded = confidence > 0.0
+            field_path = f"{section}.{field}"
+
+            if _report is not None:
+                _report[field_path] = {
+                    "extracted_value": new_val,
+                    "confidence": confidence,
+                    "grounded": grounded,
+                    "reverted": not grounded,
+                }
+
+            if not grounded:
+                spec[section][field] = copy.deepcopy(prev_val)
+                reverted.append(field_path)
+
+    return reverted
+
+
+# --- Semantic validation (M8.2) --------------------------------------------
+
+# P0 signals: explicit "must-have" language.  The literal "p0" is included so
+# a user who types "auth should be P0" is treated as an explicit P0 signal.
+_P0_SIGNALS: frozenset[str] = frozenset({
+    "must", "need", "needs", "essential", "critical", "required", "require",
+    "requires", "absolutely", "definitely", "necessary", "mandatory",
+    "launch", "blocker", "blocking", "p0",
+})
+
+_BOILERPLATE_MIN_TOKENS = 4
+
+
+def validate_semantic(
+    spec: dict,
+    prev_spec: dict,
+    history_text: str,
+) -> list[str]:
+    """Semantic checks that go beyond shape validation.
+
+    A. Priority inflation guard: a newly-extracted P0 mvp_features entry is
+       only accepted when the full conversation history (joined) contains at
+       least one explicit must-have signal word.  Without such evidence the
+       priority is downgraded to 'P1' (the model's instructed default for
+       ambiguous cases).
+
+       'Newly extracted' = the whole mvp_features field was empty in prev_spec
+       and now has entries.  Edits to an already-filled field are not re-checked
+       (the user deliberately changed the priority).
+
+    B. Boilerplate mitigation guard: a mitigation string that has fewer than
+       _BOILERPLATE_MIN_TOKENS substantive tokens is treated as generic
+       boilerplate.  The mitigation key is reset to 'unspecified' so the PRD
+       flags it as an open question rather than silently printing "TBD".
+
+       Same 'newly extracted' rule: only fires when known_risks was [] before.
+
+    Returns a list of corrected paths for logging.  Mutates spec in place.
+    """
+    full_text_tokens = _grounding_tokens(history_text)
+    has_p0_signal = bool(full_text_tokens & _P0_SIGNALS)
+    corrected: list[str] = []
+
+    # A. Priority inflation guard
+    prev_feats = prev_spec["scope_and_features"]["mvp_features"]
+    new_feats = spec["scope_and_features"]["mvp_features"]
+    if (
+        _is_empty(prev_feats)
+        and isinstance(new_feats, list)
+        and new_feats not in ([], [UNSPECIFIED])
+        and not has_p0_signal
+    ):
+        for feat in new_feats:
+            if isinstance(feat, dict) and feat.get("priority") == "P0":
+                feat["priority"] = "P1"
+                corrected.append(
+                    f"scope_and_features.mvp_features[{feat.get('name', '?')}].priority"
+                )
+
+    # B. Boilerplate mitigation guard
+    prev_risks = prev_spec["risks_assumptions"]["known_risks"]
+    new_risks = spec["risks_assumptions"]["known_risks"]
+    if (
+        _is_empty(prev_risks)
+        and isinstance(new_risks, list)
+        and new_risks not in ([], [UNSPECIFIED])
+    ):
+        for risk in new_risks:
+            if not isinstance(risk, dict):
+                continue
+            mitigation = risk.get("mitigation", UNSPECIFIED)
+            if mitigation == UNSPECIFIED:
+                continue
+            if len(_grounding_tokens(mitigation)) < _BOILERPLATE_MIN_TOKENS:
+                risk["mitigation"] = UNSPECIFIED
+                corrected.append(
+                    f"risks_assumptions.known_risks[{risk.get('risk', '?')}].mitigation"
+                )
+
+    return corrected
+
+
+def process_turn(
+    prev_spec: dict,
+    updated_spec: Any,
+    user_message: str,
+    *,
+    history: list | None = None,
+    _enable_grounding: bool = True,
+    _grounding_report: dict | None = None,
+) -> dict:
     """Apply one turn's model output to the spec under full backend control.
 
-    Pipeline: merge the model's extraction forward → reject fabricated
-    future-section sentinels → apply the deterministic skip if the user hit the
-    button → normalize structured fields and sentinel shapes → recompute the
-    authoritative _meta (current_section / completed_sections / phase).
+    Pipeline:
+      1. deep_merge — overlay model extraction onto prev_spec
+      2. reject_future_sentinels — drop fabricated future-section sentinels
+      3. apply_skip — deterministic sentinel for the skip button
+      4. check_grounding (M8.1) — revert newly-filled fields not traceable
+         to the user's message; populates _grounding_report when provided
+      5. normalize_structured_fields — coerce object shapes, backfill defaults
+      6. normalize_sentinel_shapes — fix list-vs-string sentinel mismatches
+      7. validate_semantic (M8.2) — priority inflation + boilerplate mitigation
+      8. recompute_meta — authoritative current_section / phase
+
+    history is a list of Message objects for the full conversation so far
+    (used by validate_semantic's priority inflation guard, which must scan the
+    entire conversation — the P0 signal often appears turns before the feature
+    is formally extracted).
+
+    _enable_grounding=False disables checks 4 and 7 (for tests that
+    intentionally drive ungrounded model output to verify downstream behavior).
 
     prev_spec is not mutated; the new spec is returned.
     """
@@ -248,7 +464,35 @@ def process_turn(prev_spec: dict, updated_spec: Any, user_message: str) -> dict:
     reject_future_sentinels(spec, prev_spec, current_section)
     if user_message.strip() == SKIP_MESSAGE:
         apply_skip(spec, current_section)
+
+    if _enable_grounding:
+        reverted = check_grounding(
+            spec, prev_spec, user_message, _report=_grounding_report
+        )
+        if reverted:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[grounding] reverted %d field(s): %s", len(reverted), reverted
+            )
+
     normalize_structured_fields(spec)
     normalize_sentinel_shapes(spec)
+
+    if _enable_grounding:
+        # Build the history text for semantic validation: full conversation
+        # history joined together, plus the current user message appended.
+        history_parts: list[str] = []
+        if history:
+            history_parts = [msg.content for msg in history]
+        history_parts.append(user_message)
+        history_text = " ".join(history_parts)
+
+        corrected = validate_semantic(spec, prev_spec, history_text)
+        if corrected:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[semantic] corrected %d value(s): %s", len(corrected), corrected
+            )
+
     recompute_meta(spec, prev_meta)
     return spec
