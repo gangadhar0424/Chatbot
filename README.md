@@ -46,8 +46,10 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -r requirements.txt
+# If you have a venv created before Milestone 5, re-run the above — sqlalchemy[asyncio],
+# asyncpg, and alembic were added then and won't be present in an older venv.
 
-cp .env.example .env        # then edit .env and set OLLAMA_MODEL=<your model>
+cp .env.example .env        # set OLLAMA_MODEL=<your model> and DATABASE_URL=<postgres url>
 uvicorn app.main:app --reload
 ```
 
