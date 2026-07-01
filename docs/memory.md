@@ -95,6 +95,34 @@ no git init) — explicitly excluded per the milestone spec.
 
 ---
 
+## 2026-07-01 — Why Milestones 7–9 exist
+
+**Context: all reliability bugs found so far were caught through manual
+19-turn test runs.**
+
+Every known bug in the intake flow (bulk sentinel fabrication, priority
+misgrouping in the PRD, mvp_features object shape bleeding into plain
+list fields, premature section completion) was discovered by running a
+full conversation by hand and eyeballing the resulting spec JSON. That
+process is slow, human-error-prone, and doesn't scale — a one-line
+change to flow.py or a prompt tweak can silently reintroduce any of them.
+
+Milestones 7–9 formalise those manual checks into three layers:
+- **M7 Evals**: pytest suite that replays scripted conversations with a
+  mocked LLM and asserts on final spec state. Specific regression tests
+  for each known bug. The old standalone verify_m4.py becomes a proper
+  test here.
+- **M8 Grounding guardrails**: runtime checks that extracted values must
+  be traceable to something the user actually said, plus validation
+  beyond bare shape-checking.
+- **M9 Security hardening**: explicit prompt-injection tests, rate
+  limiting, and input sanitisation across all user-facing endpoints.
+
+The driving principle: a bug that was found once manually should be
+impossible to reintroduce silently.
+
+---
+
 ## 2026-06-30 — .gitignore files in templates
 
 **Decision: store as `gitignore` (no dot), rename to `.gitignore` on copy**

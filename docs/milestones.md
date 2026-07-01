@@ -43,3 +43,28 @@ runs end to end — not just compiles or returns a 200.
 - [x] File/project scaffolding generated from the completed spec
 - [ ] Deployment integration
 - [ ] Maintenance hooks (docs, monitoring, periodic check-ins)
+
+## Milestone 7 — Evals
+- [x] Test framework set up (pytest, isolated from production Neon DB)
+- [x] Regression tests for the 4 known bugs: bulk-fabrication of sentinels
+      across future sections, priority misgrouping in PRD generation,
+      leaked field shapes (mvp_features shape bleeding into other list
+      fields), premature section completion
+- [x] Scripted end-to-end conversation tests: normal flow, skip-heavy
+      flow, terse one-word-answer flow, adversarial/prompt-injection input
+- [x] Assertions on final spec state for each scripted conversation
+- [x] Stale verify_m4.py test_409_gate replaced by a proper test here
+
+## Milestone 8 — Grounding guardrails
+- [ ] Runtime check: extracted field values must be grounded in something
+      the user actually said (no invented facts)
+- [ ] Validation beyond shape — catch values that are structurally valid
+      but semantically wrong
+- [ ] Model output confidence scoring before accepting extracted values
+
+## Milestone 9 — Security hardening
+- [ ] Prompt-injection resistance tested explicitly
+- [ ] Rate limiting on /chat, /generate-prd, and /generate-scaffold
+      endpoints
+- [ ] Input sanitization review across all user-facing inputs
+- [ ] API key rotation plan documented

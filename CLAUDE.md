@@ -29,3 +29,15 @@ every field is filled, generates a professional PRD document.
   not just compiles.
 - The API key for the production provider lives server-side only. Never send
   it to, or read it from, frontend code.
+
+## Testing (Milestone 7+)
+- All tests live in `backend/tests/`. Run with `pytest`.
+- The LLM `generate()` function is always mocked in tests — no real Ollama
+  or cloud API calls. Tests are deterministic and free.
+- The production Neon DB is never touched by tests. Use an in-process
+  SQLite DB (or a dedicated test Postgres URL from env) with fixtures that
+  reset between runs.
+- Unit tests for flow logic (flow.py, normalise functions) call functions
+  directly — no running server required.
+- End-to-end conversation tests use FastAPI's `TestClient` with a mocked
+  LLM, driving scripted turn sequences and asserting on the final spec JSON.
