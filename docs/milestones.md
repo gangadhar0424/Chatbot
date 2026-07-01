@@ -63,8 +63,8 @@ runs end to end — not just compiles or returns a 200.
 - [x] Model output confidence scoring before accepting extracted values
 
 ## Milestone 9 — Security hardening
-- [ ] Prompt-injection resistance tested explicitly
-- [ ] Rate limiting on /chat, /generate-prd, and /generate-scaffold
+- [x] Prompt-injection resistance tested explicitly
+- [x] Rate limiting on /chat, /generate-prd, and /generate-scaffold
       endpoints
-- [ ] Input sanitization review across all user-facing inputs
-- [ ] API key rotation plan documented
+- [x] Input sanitization review across all user-facing inputs
+- [x] API key rotation plan documented

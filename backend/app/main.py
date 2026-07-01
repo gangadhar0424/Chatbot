@@ -11,8 +11,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import flow, sessions
@@ -33,6 +36,14 @@ from app.schemas import (
 
 load_dotenv()
 
+# Rate limiter — per client IP. Limits are configurable via env vars so tests
+# can raise them without touching code. Production defaults: 30/min for /chat,
+# 5/min for the one-shot generation endpoints.
+limiter = Limiter(key_func=get_remote_address)
+_RATE_LIMIT_CHAT = os.getenv("RATE_LIMIT_CHAT", "30/minute")
+_RATE_LIMIT_PRD = os.getenv("RATE_LIMIT_PRD", "5/minute")
+_RATE_LIMIT_SCAFFOLD = os.getenv("RATE_LIMIT_SCAFFOLD", "5/minute")
+
 # Built once at startup.
 PROMPT_A_SYSTEM_PROMPT = build_prompt_a_system_prompt()
 PROMPT_B_SYSTEM_PROMPT = build_prompt_b_system_prompt()
@@ -45,6 +56,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Project-intake chatbot", version="0.3.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Allow the Next.js dev server to call us. Configurable for other origins.
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -113,7 +126,9 @@ async def _log_grounding_async(
 
 
 @app.post("/chat", response_model=ChatResponse)
+@limiter.limit(_RATE_LIMIT_CHAT)
 async def chat(
+    request: Request,
     req: ChatRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -388,8 +403,11 @@ def _strip_trailing_commentary(text: str) -> str:
 
 
 @app.post("/generate-prd", response_model=PrdResponse)
+@limiter.limit(_RATE_LIMIT_PRD)
 async def generate_prd(
-    req: PrdRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    req: PrdRequest,
+    db: AsyncSession = Depends(get_db),
 ) -> PrdResponse:
     """Generate the PRD from a completed spec using Prompt B.
 
@@ -425,8 +443,11 @@ async def generate_prd(
 
 
 @app.post("/generate-scaffold", response_model=ScaffoldResponse)
+@limiter.limit(_RATE_LIMIT_SCAFFOLD)
 async def generate_scaffold(
-    req: ScaffoldRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    req: ScaffoldRequest,
+    db: AsyncSession = Depends(get_db),
 ) -> ScaffoldResponse:
     """Copy the best-matching template, write a spec-derived README, and create
     P0 feature stubs. Returns the output path and file list. Nothing is

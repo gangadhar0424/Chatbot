@@ -11,6 +11,10 @@ import os
 
 # Must come before any app.* import.
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/testdb"
+# No RATE_LIMIT_* overrides here — production defaults (30/min for /chat,
+# 5/min for generation endpoints) apply. The reset_rate_limiter autouse
+# fixture clears in-memory counters before every test so existing tests
+# (≤9 /chat requests each) never accumulate across tests and never hit the limit.
 
 import pytest
 from unittest.mock import patch
@@ -151,6 +155,23 @@ def chat_client(fake_sessions):
 
 
 # ── LLM mock helper ───────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear in-memory rate-limit counters before each test.
+
+    All TestClient requests share the same 'testclient' host key. Without this
+    reset, counts accumulate across tests and later tests could hit the limit
+    inadvertently. Using a try/except so the fixture degrades gracefully if the
+    slowapi internal API ever changes.
+    """
+    from app.main import limiter
+    try:
+        limiter._storage.reset()
+    except Exception:
+        pass
+    yield
+
 
 def model_json(spec_updates: dict, reply: str, phase: str = "gathering") -> str:
     """Build the JSON string a mocked generate() would return for one turn."""

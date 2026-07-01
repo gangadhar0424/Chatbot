@@ -26,6 +26,20 @@ def _output_root() -> Path:
     return Path(env) if env else _DEFAULT_OUTPUT_ROOT
 
 
+def _assert_inside(path: Path, root: Path) -> None:
+    """Raise ValueError if path resolves to something outside root.
+
+    Called for both the output directory and each individual stub file so a
+    traversal in a feature slug can't escape even if the directory check passes.
+    """
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        raise ValueError(
+            f"Path traversal detected: {path!r} is not inside {root!r}"
+        )
+
+
 def _slugify(text: str) -> str:
     text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -209,6 +223,7 @@ def generate_scaffold(spec: dict, match: MatchResult) -> dict:
     slug = _slugify(one_liner)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = _output_root() / f"{slug}-{stamp}"
+    _assert_inside(out_dir, _output_root())   # output-dir containment check
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Copy template tree (with dotfile renaming).
@@ -232,6 +247,7 @@ def generate_scaffold(spec: dict, match: MatchResult) -> dict:
         name = feature.get("name", "unnamed-feature")
         feature_slug = _slugify(name)
         for path, content in _stubs_for(match.template, name, feature_slug, out_dir):
+            _assert_inside(path, out_dir)      # per-file containment check
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
             rel = str(path.relative_to(out_dir)).replace(os.sep, "/")

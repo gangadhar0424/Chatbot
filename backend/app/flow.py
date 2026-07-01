@@ -32,6 +32,26 @@ VALID_PRIORITIES = {"P0", "P1", "P2"}
 VALID_IMPACTS = {"High", "Medium", "Low"}
 UNSPECIFIED = "unspecified"
 
+
+def _strip_unknown_keys(spec: dict) -> None:
+    """Remove keys the model invented that don't exist in the schema.
+
+    Guards against injected top-level keys (e.g. '_backdoor') and injected
+    fields inside sections (e.g. problem_and_vision._injected). Only schema
+    keys survive into the session spec. _meta is kept; its contents are
+    overwritten wholesale by recompute_meta anyway. Mutates spec in place.
+    """
+    allowed_top = set(SECTION_ORDER) | {"_meta"}
+    for key in list(spec.keys()):
+        if key not in allowed_top:
+            del spec[key]
+    for section in SECTION_ORDER:
+        if section in spec and isinstance(spec[section], dict):
+            allowed_fields = set(SECTION_FIELDS[section])
+            for field in list(spec[section].keys()):
+                if field not in allowed_fields:
+                    del spec[section][field]
+
 # The canned message the frontend "Not sure / skip" button sends. Kept in sync
 # with SKIP_MESSAGE in frontend/app/page.tsx.
 SKIP_MESSAGE = "I'm not sure, let's move on."
@@ -458,6 +478,7 @@ def process_turn(
 
     if isinstance(updated_spec, dict):
         spec = deep_merge(prev_spec, updated_spec)
+        _strip_unknown_keys(spec)
     else:
         spec = copy.deepcopy(prev_spec)
 
