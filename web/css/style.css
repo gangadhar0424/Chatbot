@@ -1,0 +1,410 @@
+/* CSS custom properties copied from reference/ai-system's static/style.css
+   :root block(s) — reused as-is rather than inventing new tokens. Component
+   styles below are new, built on top of these variables for this app. */
+
+:root {
+  --bg: #282c34;
+  --fg: #9cdef2;
+  --panel: #111;
+  --border: #355a66;
+  --red: #e06c75;
+  --green: #50fa7b;
+  --warn: #f0ad4e;
+
+  --color-error: #ff4444;
+  --color-error-light: #ff6666;
+  --color-success: #4caf50;
+  --color-warning: #f0ad4e;
+  --color-danger: #c0392b;
+  --color-muted: #888;
+  --color-muted-alt: #6b7280;
+  --color-accent: #00aaff;
+  --color-brand-blue: #3b82f6;
+  --color-link-hover: #66c7ff;
+  --color-subheader: #6b8a94;
+}
+
+:root.light {
+  --bg: #f5f5f5;
+  --fg: #2b2b2b;
+  --panel: #fff;
+  --border: #bbb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+#chat-panel.hidden {
+  display: none;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+
+.view {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-chat {
+  height: 100vh;
+}
+
+.view-confirm,
+.view-prd {
+  padding-bottom: 4rem;
+}
+
+.view-prd {
+  max-width: 48rem;
+}
+
+.view-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.view-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-muted-alt);
+  margin: 0 0 1.5rem;
+}
+
+/* ── Chat view ─────────────────────────────────────────────────────────── */
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message-list-empty {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.message-row-user {
+  text-align: right;
+}
+
+.message-row-assistant {
+  text-align: left;
+}
+
+.bubble {
+  display: inline-block;
+  max-width: 80%;
+  white-space: pre-wrap;
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.bubble-user {
+  background: var(--color-brand-blue);
+  color: #fff;
+}
+
+.bubble-assistant {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.bubble-loading {
+  color: var(--color-muted);
+}
+
+.chat-form {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  background: var(--panel);
+  color: var(--fg);
+}
+
+.chat-input:disabled {
+  opacity: 0.6;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+
+.btn {
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-brand-blue);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.btn-muted {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.action-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.error-text {
+  color: var(--color-error);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* ── Spec summary (confirm view) ──────────────────────────────────────── */
+
+.spec-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.spec-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  margin: 0 0 0.5rem;
+}
+
+.spec-section-rows {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.spec-field-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.spec-field-row:first-child {
+  border-top: none;
+}
+
+.spec-field-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-muted-alt);
+  padding-top: 0.125rem;
+}
+
+.field-string {
+  font-size: 0.875rem;
+}
+
+.not-specified {
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+.field-list {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.mvp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tag {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.tag-red {
+  background: rgba(224, 108, 117, 0.2);
+  color: var(--red);
+}
+
+.tag-yellow {
+  background: rgba(240, 173, 78, 0.2);
+  color: var(--warn);
+}
+
+.tag-green {
+  background: rgba(80, 250, 123, 0.2);
+  color: var(--green);
+}
+
+.tag-slate {
+  background: rgba(136, 136, 136, 0.2);
+  color: var(--color-muted);
+}
+
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.risk-card {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+}
+
+.risk-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.risk-card-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.risk-card-mitigation {
+  margin: 0.25rem 0 0 2.5rem;
+  font-size: 0.875rem;
+  color: var(--color-muted-alt);
+}
+
+/* ── PRD view ──────────────────────────────────────────────────────────── */
+
+.prd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.prd-doc {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  padding: 1.5rem;
+}
+
+.prose {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.prose :is(h1, h2, h3) {
+  margin-top: 1.5em;
+}
+
+.scaffold-box {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+}
+
+.scaffold-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.scaffold-desc {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  margin: 0 0 0.75rem;
+}
+
+.scaffold-info {
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-label-inline {
+  font-weight: 500;
+}
+
+.code-chip,
+.code-inline {
+  background: var(--border);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+}
+
+.tag-warn {
+  background: rgba(240, 173, 78, 0.2);
+  color: var(--warn);
+  margin-left: 0.5rem;
+}
+
+.scaffold-note {
+  background: rgba(240, 173, 78, 0.1);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--warn);
+}
+
+.scaffold-files summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.scaffold-file-list {
+  margin: 0.25rem 0 0;
+  padding-left: 0.75rem;
+  list-style: none;
+}

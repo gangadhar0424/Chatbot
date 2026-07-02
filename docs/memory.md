@@ -157,6 +157,60 @@ impossible to reintroduce silently.
 
 ---
 
+## 2026-07-02 — M8: old-vs-new stack comparison + two bug fixes
+
+**Context: before removing the old stack (frontend/, backend/app/main.py),
+ran the same scripted conversation against both backend/app/main.py (:8000,
+Postgres) and backend/web_app.py (:8001, SQLite) and diffed spec_json, PRD
+output, and scaffold output.**
+
+**Result: M8 passed — no regression from the rewrite.** Final spec_json
+matched field-for-field on identical input; scaffold output was identical
+(template, file list); the one PRD-generation bug found reproduced
+identically on both stacks, confirming it predates the rewrite.
+
+**Bug found #1 — PRD truncation.** Prompt B (`generate-prd`) intermittently
+cut off mid-document on the local 3B model (qwen2.5:3b), as short as
+~1,100 chars on a spec that should produce ~5,000. Reproduced on both
+stacks. An Ollama probe returned `done_reason: "stop"` (the model choosing
+to end, not hitting a length cap) on an unrelated prompt, so the exact
+mechanism isn't fully understood — but empirically, adding an explicit
+`num_predict=4096` cap on the Prompt B call (`llm_core.llm_call_async`,
+wired in via `prd_routes.py`'s `_PRD_NUM_PREDICT`) eliminated truncation
+across all post-fix trials (0/6 truncated vs. 4/5 before). Old stack
+(`app/main.py`) was left unpatched since it's slated for removal.
+
+**Bug found #2 — risk-tier / priority-tier mislabeling.** `_prepare_spec_for_prd`
+pre-groups `known_risks` by impact (High/Medium/Low) and `mvp_features` by
+priority (P0/P1/P2) into JSON keys and instructs the model to "transcribe,
+don't re-sort." The model ignores that instruction unpredictably — shifting
+a risk up a tier, collapsing risks into one bucket, or inventing a risk to
+fill an empty one. Same story for the M8 test's untested but same-mechanism
+mvp_features grouping.
+
+**Fix: stopped asking the model to transcribe these groupings at all.**
+`_prepare_spec_for_prd` (prd_routes.py only — old stack is being removed, no
+need to backport) no longer sends `mvp_features`/`known_risks` data to the
+model; instead it instructs Prompt B to emit literal marker tokens
+(`[[RENDER:MVP_FEATURES]]`, `[[RENDER:KNOWN_RISKS]]`) in their place. After
+the call, `_insert_rendered_blocks` replaces those markers with markdown
+rendered directly from the spec's already-structured data (pure formatting,
+no LLM involved) — with a heading-based fallback insertion for when the
+model mangles or drops the marker (observed: it sometimes emits
+`[RENDER:...]` with single brackets). Verified 3/3 correct labeling across
+fresh generations post-fix, vs. wrong every time before.
+
+**Known minor issue, not a blocker:** the model doesn't fully honor "don't
+write this part yourself" — it sometimes also writes its own redundant
+version of the Scope/Risks content alongside the correctly-inserted block,
+so the PRD can show mild duplication (e.g., "Should-have (P1): None
+specified" appearing twice) in the affected sections. The correct,
+accurately-labeled data is always present; explicitly decided not to chase
+this with fragile text-matching/dedup logic — logging as a known cosmetic
+issue for later rather than fixing now.
+
+---
+
 ## 2026-06-30 — .gitignore files in templates
 
 **Decision: store as `gitignore` (no dot), rename to `.gitignore` on copy**
